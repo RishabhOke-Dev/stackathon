@@ -1,4 +1,4 @@
-use std::{error::Error, fmt::Display};
+use std::{collections::HashMap, error::Error, fmt::Display};
 
 use crate::{lexer::{Token, TokenPosition, TokenType}, types::{Keyword, Operation, Value}};
 
@@ -42,7 +42,7 @@ impl Display for RuntimeError {
 
 impl Error for RuntimeError {}
 
-pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>) -> Result<(), RuntimeError>{
+pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>, function_table: &HashMap<String, Vec<Token>>) -> Result<(), RuntimeError>{
 
     let stack = match stack {
         Some(s) => s,
@@ -51,7 +51,10 @@ pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>) -> Result<(), Run
 
     for token in tokens {
         match &token.kind {
-            TokenType::Literal(lit) => stack.push(lit.clone()),
+            TokenType::Literal(lit) => match lit {
+                Value::Function(func) => stack.push(Value::Block(function_table.get(func).unwrap().clone())),
+                _ => stack.push(lit.clone())
+            },
             TokenType::Op(op) => {
 
                 match op {
@@ -229,7 +232,7 @@ pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>) -> Result<(), Run
                             },
                             None => return Err(RuntimeError::OperatorInvalidValues(token.pos, '$'))
                         };
-                        execute(&val1, Some(stack))?;
+                        execute(&val1, Some(stack), function_table)?;
                     },
                 }
             },
@@ -257,7 +260,7 @@ pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>) -> Result<(), Run
                             if !condition {
                                 break;
                             }
-                            execute(&function, Some(stack))?;
+                            execute(&function, Some(stack), function_table)?;
                         }
                         
                         
@@ -301,9 +304,9 @@ pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>) -> Result<(), Run
                         }
                         
                         if cond {
-                            execute(&true_func, Some(stack))?;
+                            execute(&true_func, Some(stack), function_table)?;
                         } else {
-                            execute(&false_func, Some(stack))?;
+                            execute(&false_func, Some(stack), function_table)?;
                         }
                     }
                     _ => ()//unused keywords,

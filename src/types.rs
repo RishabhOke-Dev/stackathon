@@ -22,6 +22,7 @@ pub enum Value {
     Boolean(bool),
     String(String),
     Block(Vec<Token>),
+    Function(String),
 }
 
 
@@ -33,6 +34,7 @@ impl Display for Value {
             Value::Boolean(boolean) => write!(f, "{}", if *boolean {"true"} else {"false"}),
             Value::String(string) => write!(f, "{}", string),
             Value::Block(tok) => write!(f, "{:?}", tok) /*TODO change this to something that makes sense*/,
+            Value::Function(fun) => write!(f, "{}", fun),
         }
     }
 }
@@ -100,6 +102,7 @@ impl PartialEq for Value {
             (Value::Integer(v1), Value::Integer(v2)) => v1 == v2,
             (Value::Boolean(v1), Value::Boolean(v2)) => v1 == v2,
             (Value::String(v1), Value::String(v2)) => v1 == v2,
+            (Value::Function(f), Value::Function(f2)) => f == f2,
             _ => false,
         }
     }

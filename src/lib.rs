@@ -57,7 +57,7 @@ pub fn run_file(filepath: &str) {
     //println!("Tokenized with tokens {:#?}", tokens);
 
 
-    if let Err(e) = execute(&tokens, None) {
+    if let Err(e) = execute(&tokens, None, &functions) {
         match e {
             RuntimeError::OperatorInvalidValues(ref pos, _) => 
                 print_error(&source, &e.to_string(), pos.row, pos.col),

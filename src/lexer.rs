@@ -383,8 +383,7 @@ pub fn tokenize(code: &str, starting_position: Option<TokenPosition>, functions:
                 Some(key) => key.clone(),
                 None => {
                     if functions.contains_key(&ident) {
-                        tokens.push(Token::new(TokenType::Literal(Value::Block(functions.get(&ident).unwrap().clone())),starting_position.row, starting_position.col));
-
+                        tokens.push(Token::new(TokenType::Literal(Value::Function(ident)),starting_position.row, starting_position.col));
                         continue;
                     } else {
                         return Err(TokenizerError::UnknownIdentifier(starting_position, ident));
