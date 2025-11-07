@@ -10,8 +10,10 @@ pub enum Keyword {
     FALSE,
     EXIT,
     LOOP, //Control flow! used like <cond> <code> loop
-    DUPLICATE,
     GATE,
+    DUPLICATE,
+    FETCH,
+    DROP,
 }
 
 #[derive(Debug)]

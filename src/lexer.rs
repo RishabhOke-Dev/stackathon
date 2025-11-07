@@ -494,6 +494,8 @@ fn get_keywords() -> &'static HashMap<&'static str, Keyword> {
         map.insert("loop", Keyword::LOOP);
         map.insert("dup", Keyword::DUPLICATE);
         map.insert("gate", Keyword::GATE);
+        map.insert("fetch", Keyword::FETCH);
+        map.insert("drop", Keyword::DROP);
         map
     })
 }

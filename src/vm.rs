@@ -274,6 +274,20 @@ pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>, function_table: &
                         stack.push(val.clone());
                         stack.push(val);
                     },
+                    Keyword::DROP => {
+                        stack.pop();
+                    },
+                    Keyword::FETCH => {
+                        let index = match stack.pop() {
+                            Some(v) => match v {
+                                Value::Integer(i) => i as usize,
+                                _ => return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::FETCH))
+                            },
+                            None => return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::FETCH))
+                        };
+                        let value = stack.data.remove(index);
+                        stack.push(value);
+                    }
                     Keyword::GATE => {
                         let true_func = match stack.pop() {
                             Some(v) => match v {
