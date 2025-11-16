@@ -1,3 +1,4 @@
+
 use std::{fmt::Display, ops::{Add, Div, Mul, Not, Sub}};
 
 use crate::lexer::Token;
@@ -11,9 +12,18 @@ pub enum Keyword {
     EXIT,
     LOOP, //Control flow! used like <cond> <code> loop
     GATE,
-    DUPLICATE,
-    FETCH,
+    DUPLICATE,//All the stack manip keywords
     DROP,
+    SWAP,
+    DEPTH,
+    ROT,
+    NROT,
+    OVER,
+    TUCK,
+    PICK,
+    ROLL,
+    CLEAR,
+    TYPE, //gets the type and pushes it onto the stack. The type of the value it pushes is "Tag"
 }
 
 #[derive(Debug)]
@@ -25,6 +35,7 @@ pub enum Value {
     String(String),
     Block(Vec<Token>),
     Function(String),
+    Tag(String), //Is both a manual tag eg. @list or the result of a type eg. 2 type
 }
 
 
@@ -37,6 +48,7 @@ impl Display for Value {
             Value::String(string) => write!(f, "{}", string),
             Value::Block(tok) => write!(f, "{:?}", tok) /*TODO change this to something that makes sense*/,
             Value::Function(fun) => write!(f, "{}", fun),
+            Value::Tag(str) => write!(f, "{}", str),
         }
     }
 }
@@ -105,6 +117,7 @@ impl PartialEq for Value {
             (Value::Boolean(v1), Value::Boolean(v2)) => v1 == v2,
             (Value::String(v1), Value::String(v2)) => v1 == v2,
             (Value::Function(f), Value::Function(f2)) => f == f2,
+            (Value::Tag(t), Value::Tag(t2)) => t == t2,
             _ => false,
         }
     }

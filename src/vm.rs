@@ -8,7 +8,7 @@ pub struct Stack {
 }
 
 impl Stack {
-    fn new() -> Self {
+    pub fn new() -> Self {
         Stack {data: Vec::new()}
     }
 
@@ -29,6 +29,15 @@ pub enum RuntimeError {
     KeywordInvalidValues(TokenPosition, Keyword),
 }
 
+impl RuntimeError {
+    pub fn position(&self) -> TokenPosition {
+        match self {
+            RuntimeError::OperatorInvalidValues(pos, _) => *pos,
+            RuntimeError::KeywordInvalidValues(pos, _) => *pos,
+        }
+    }
+}
+
 impl Display for RuntimeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -42,17 +51,20 @@ impl Display for RuntimeError {
 
 impl Error for RuntimeError {}
 
-pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>, function_table: &HashMap<String, Vec<Token>>) -> Result<(), RuntimeError>{
-
-    let stack = match stack {
-        Some(s) => s,
-        None => &mut Stack::new(),
-    };
+pub fn execute(tokens: &Vec<Token>, stack: &mut Stack, function_table: &HashMap<String, Vec<Token>>) -> Result<(), RuntimeError>{
 
     for token in tokens {
         match &token.kind {
             TokenType::Literal(lit) => match lit {
-                Value::Function(func) => stack.push(Value::Block(function_table.get(func).unwrap().clone())),
+                Value::Function(func) => {
+                    let function_definition = function_table.get(func).unwrap();
+
+                    if function_definition.is_empty() {
+                        stack.push(Value::Tag(func.clone()));
+                    } else {
+                        stack.push(Value::Block(function_definition.clone()));
+                    }
+                },
                 _ => stack.push(lit.clone())
             },
             TokenType::Op(op) => {
@@ -81,7 +93,7 @@ pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>, function_table: &
                             Some(v) => v,
                             None => return Err(RuntimeError::OperatorInvalidValues(token.pos, '/'))
                         };
-                        stack.push(match val1 / val2 {
+                        stack.push(match val2 / val1 {
                             Some(v) => v,
                             None => return Err(RuntimeError::OperatorInvalidValues(token.pos, '/'))
                         });
@@ -109,7 +121,7 @@ pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>, function_table: &
                             Some(v) => v,
                             None => return Err(RuntimeError::OperatorInvalidValues(token.pos, '-'))
                         };
-                        stack.push(match val1 - val2 {
+                        stack.push(match val2 - val1 {
                             Some(v) => v,
                             None => return Err(RuntimeError::OperatorInvalidValues(token.pos, '-'))
                         });
@@ -155,7 +167,7 @@ pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>, function_table: &
                             Some(v) => v,
                             None => return Err(RuntimeError::OperatorInvalidValues(token.pos, '<'))
                         };
-                        stack.push(Value::Boolean(val1 < val2));
+                        stack.push(Value::Boolean(val2 < val1));
                     },
                     Operation::LesserEqual => {
                         let val1 = match stack.pop() {
@@ -166,7 +178,7 @@ pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>, function_table: &
                             Some(v) => v,
                             None => return Err(RuntimeError::OperatorInvalidValues(token.pos, '<'))
                         };
-                        stack.push(Value::Boolean(val1 <= val2));
+                        stack.push(Value::Boolean(val2 <= val1));
                     },
                     Operation::Greater => {
                         let val1 = match stack.pop() {
@@ -177,7 +189,7 @@ pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>, function_table: &
                             Some(v) => v,
                             None => return Err(RuntimeError::OperatorInvalidValues(token.pos, '>'))
                         };
-                        stack.push(Value::Boolean(val1 > val2));
+                        stack.push(Value::Boolean(val2 > val1));
                     },
                     Operation::GreaterEqual => {
                         let val1 = match stack.pop() {
@@ -188,7 +200,7 @@ pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>, function_table: &
                             Some(v) => v,
                             None => return Err(RuntimeError::OperatorInvalidValues(token.pos, '>'))
                         };
-                        stack.push(Value::Boolean(val1 >= val2));
+                        stack.push(Value::Boolean(val2 >= val1));
                     },
                     Operation::And => {
                         let val1 = match stack.pop() {
@@ -211,16 +223,16 @@ pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>, function_table: &
                         let val1 = match stack.pop() {
                             Some(v) => match v {
                                 Value::Boolean(b) => b,
-                                _ => return Err(RuntimeError::OperatorInvalidValues(token.pos, '&')),
+                                _ => return Err(RuntimeError::OperatorInvalidValues(token.pos, '|')),
                             },
-                            None => return Err(RuntimeError::OperatorInvalidValues(token.pos, '&'))
+                            None => return Err(RuntimeError::OperatorInvalidValues(token.pos, '|'))
                         };
                         let val2 = match stack.pop() {
                             Some(v) => match v {
                                 Value::Boolean(b) => b,
-                                _ => return Err(RuntimeError::OperatorInvalidValues(token.pos, '&')),
+                                _ => return Err(RuntimeError::OperatorInvalidValues(token.pos, '|')),
                             },
-                            None => return Err(RuntimeError::OperatorInvalidValues(token.pos, '&'))
+                            None => return Err(RuntimeError::OperatorInvalidValues(token.pos, '|'))
                         };
                         stack.push(Value::Boolean(val1 || val2));
                     },
@@ -232,7 +244,7 @@ pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>, function_table: &
                             },
                             None => return Err(RuntimeError::OperatorInvalidValues(token.pos, '$'))
                         };
-                        execute(&val1, Some(stack), function_table)?;
+                        execute(&val1, stack, function_table)?;
                     },
                 }
             },
@@ -260,7 +272,7 @@ pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>, function_table: &
                             if !condition {
                                 break;
                             }
-                            execute(&function, Some(stack), function_table)?;
+                            execute(&function, stack, function_table)?;
                         }
                         
                         
@@ -277,17 +289,99 @@ pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>, function_table: &
                     Keyword::DROP => {
                         stack.pop();
                     },
-                    Keyword::FETCH => {
+                    Keyword::SWAP => {
+                        if stack.data.len() < 2 {
+                            return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::SWAP));
+                        }
+                        let a = match stack.pop() {
+                            Some(v) => v,
+                            None => return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::SWAP)),
+                        };
+                        let b = match stack.pop() {
+                            Some(v) => v,
+                            None => return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::SWAP)),
+                        };
+                        stack.push(b);
+                        stack.push(a);
+                    },
+                    Keyword::DEPTH => {
+                        stack.push(Value::Integer(stack.data.len() as i32));
+                    },
+                    Keyword::ROT => {
+                        let len = stack.data.len();
+                        if len < 3 {
+                            return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::ROT));
+                        }
+                        stack.data.swap(len - 1, len - 2);
+                        stack.data.swap(len - 3, len - 1);
+                    },
+                    Keyword::NROT => {
+                        let len = stack.data.len();
+                        if len < 3 {
+                            return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::NROT));
+                        }
+                        stack.data.swap(len - 3, len - 1);
+                        stack.data.swap(len - 2, len - 1);
+                    },
+                    Keyword::OVER => {
+                        let len = stack.data.len();
+                        if len < 2 {
+                            return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::OVER));
+                        }
+                        let val = stack.data[len - 2].clone();
+                        stack.push(val);
+                    },
+                    Keyword::TUCK =>  {
+                        let len = stack.data.len();
+                        if len < 2 {
+                            return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::TUCK));
+                        }
+                        let val = match stack.pop() {
+                            Some(v) => v,
+                            None => return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::TUCK))
+                        };
+                        stack.data.insert(len - 2, val.clone());
+                        stack.push(val);
+                    },
+                    Keyword::PICK => {
                         let index = match stack.pop() {
                             Some(v) => match v {
-                                Value::Integer(i) => i as usize,
-                                _ => return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::FETCH))
+                                Value::Integer(i) => i-1,
+                                _ => return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::PICK))
                             },
-                            None => return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::FETCH))
+                            None => return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::PICK))
                         };
-                        let value = stack.data.remove(index);
-                        stack.push(value);
-                    }
+                        if index < 0 {
+                            return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::ROLL));
+                        }
+                        let index = index as usize;
+                        if stack.data.len() <= index {
+                            return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::PICK));
+                        }
+                        let val = stack.data[index].clone();
+                        stack.push(val);
+                    },
+                    Keyword::ROLL => {
+                        let index = match stack.pop() {
+                            Some(v) => match v {
+                                Value::Integer(i) => i-1,
+                                _ => return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::ROLL))
+                            },
+                            None => return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::ROLL))
+                        };
+                        if index < 0 {
+                            return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::ROLL));
+                        }
+                        let index = index as usize;
+                        if stack.data.len() <= index {
+                            return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::ROLL));
+                        }
+                        let val = stack.data.remove(index);
+                        stack.push(val);
+                    },
+                    Keyword::CLEAR => {
+                        stack.data.clear();
+                    },
                     Keyword::GATE => {
                         let true_func = match stack.pop() {
                             Some(v) => match v {
@@ -318,11 +412,28 @@ pub fn execute(tokens: &Vec<Token>, stack: Option<&mut Stack>, function_table: &
                         }
                         
                         if cond {
-                            execute(&true_func, Some(stack), function_table)?;
+                            execute(&true_func, stack, function_table)?;
                         } else {
-                            execute(&false_func, Some(stack), function_table)?;
+                            execute(&false_func, stack, function_table)?;
                         }
-                    }
+                    },
+                    Keyword::TYPE => {
+                        let val = match stack.pop() {
+                            Some(v) => v,
+                            None => return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::TYPE)),
+                        };
+                        stack.push(Value::Tag(
+                            match val {
+                                Value::Block(_) => "block".to_string(),
+                                Value::Integer(_) => "int".to_string(),
+                                Value::Float(_) => "float".to_string(),
+                                Value::String(_) => "string".to_string(),
+                                Value::Boolean(_) => "bool".to_string(),
+                                Value::Tag(t) => t,
+                                Value::Function(_) => "function".to_string(), //This one should be impossible (for now) because functions turn into blocks when pushed
+                            }
+                        ));
+                    },
                     _ => ()//unused keywords,
                 }
             },

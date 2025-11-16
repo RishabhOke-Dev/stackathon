@@ -10,6 +10,7 @@ pub struct TokenPosition {
     pub col: usize,
 }
 
+
 impl Clone for TokenPosition {
     fn clone(&self) -> Self {
         TokenPosition { row: self.row, col: self.col }
@@ -53,8 +54,20 @@ pub enum TokenizerError {
     UnknownIdentifier(TokenPosition, String),
     BlockHadNoEnd(TokenPosition),
     StringHadNoEnd(TokenPosition),
-    FunctionHasNoDefinition(TokenPosition, String),
     FunctionHasMultipleDefinitions(TokenPosition, String),
+}
+
+impl TokenizerError {
+    pub fn position(&self) -> TokenPosition {
+        match self {
+            TokenizerError::InvalidNumberFormat(pos) => *pos,
+            TokenizerError::UnexpectedSymbol(pos, _) => *pos,
+            TokenizerError::UnknownIdentifier(pos, _) => *pos,
+            TokenizerError::BlockHadNoEnd(pos) => *pos,
+            TokenizerError::StringHadNoEnd(pos) => *pos,
+            TokenizerError::FunctionHasMultipleDefinitions(pos, _) => *pos,
+        }
+    }
 }
 
 impl fmt::Display for TokenizerError {
@@ -70,8 +83,6 @@ impl fmt::Display for TokenizerError {
                 write!(f, "Syntax error({}:{}): Block has no matching brace", pos.row, pos.col),
             Self::StringHadNoEnd(pos) =>
                 write!(f, "Syntax error({}:{}): String has no end.", pos.row, pos.col),
-            Self::FunctionHasNoDefinition(pos, func) =>
-                write!(f, "Syntax error({}:{}): Function '{}' has no definition.", pos.row, pos.col, func),
             Self::FunctionHasMultipleDefinitions(pos, func) =>
                 write!(f, "Syntax error({}:{}): Function '{}' has multiple definitions.", pos.row, pos.col, func),
         }
@@ -339,7 +350,7 @@ pub fn tokenize(code: &str, starting_position: Option<TokenPosition>, functions:
             loop {
                 let next_char = match code.next() {
                     Some(c) => c,
-                    None => return Err(TokenizerError::FunctionHasNoDefinition(start_pos, function_name)),
+                    None => break,
                 };
 
                 if next_char.is_whitespace() {
@@ -353,14 +364,18 @@ pub fn tokenize(code: &str, starting_position: Option<TokenPosition>, functions:
                 function_name.push(next_char);
                 position.col += 1;
             }
-            position.col += 1;
-            code.next();
             if functions.contains_key(&function_name) {
                 return Err(TokenizerError::FunctionHasMultipleDefinitions(start_pos, function_name));
             }
-            functions.insert(function_name.clone(), Vec::new());
-            let definition = handle_block(&mut position, &mut code, functions)?;
-            functions.insert(function_name, definition);
+            position.col += 1;
+            let c = code.next().unwrap_or(' ');
+            if c != '{' {
+               functions.insert(function_name, Vec::new());
+            } else {
+                functions.insert(function_name.clone(), Vec::new());
+                let definition = handle_block(&mut position, &mut code, functions)?;
+                functions.insert(function_name, definition);
+            }
         }
 
         //handles keywords and identifiers
@@ -494,8 +509,17 @@ fn get_keywords() -> &'static HashMap<&'static str, Keyword> {
         map.insert("loop", Keyword::LOOP);
         map.insert("dup", Keyword::DUPLICATE);
         map.insert("gate", Keyword::GATE);
-        map.insert("fetch", Keyword::FETCH);
         map.insert("drop", Keyword::DROP);
+        map.insert("type", Keyword::TYPE);
+        map.insert("swap", Keyword::SWAP);
+        map.insert("depth", Keyword::DEPTH);
+        map.insert("rot", Keyword::ROT);
+        map.insert("nrot", Keyword::NROT);
+        map.insert("over", Keyword::OVER);
+        map.insert("tuck", Keyword::TUCK);
+        map.insert("pick", Keyword::PICK);
+        map.insert("roll", Keyword::ROLL);
+        map.insert("clear", Keyword::CLEAR);
         map
     })
 }
