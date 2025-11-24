@@ -1,7 +1,7 @@
 
 use std::{fmt::Display, ops::{Add, Div, Mul, Not, Sub}};
 
-use crate::lexer::Token;
+use crate::{lexer::Token, serial::{ByteSized, SerializationError}};
 
 #[derive(Debug)]
 #[derive(Clone)]
@@ -165,4 +165,296 @@ pub enum Operation {
     Or,
     Not,
     Run,
+}
+
+impl ByteSized for Keyword {
+    fn to_bytes(&self) -> Vec<u8> {
+
+        let binary: u8 = match self {
+            Keyword::PRINT => 0x01,
+            Keyword::TRUE => 0x02,
+            Keyword::FALSE => 0x03,
+            Keyword::EXIT => 0x04,
+            Keyword::LOOP => 0x05,
+            Keyword::GATE => 0x06,
+            Keyword::DUPLICATE => 0x07,
+            Keyword::DROP => 0x08,
+            Keyword::SWAP => 0x09,
+            Keyword::DEPTH => 0x0A,
+            Keyword::ROT => 0x0B,
+            Keyword::NROT => 0x0C,
+            Keyword::OVER => 0x0D,
+            Keyword::TUCK => 0x0E,
+            Keyword::PICK => 0x0F,
+            Keyword::ROLL => 0x10,
+            Keyword::CLEAR => 0x11,
+            Keyword::TYPE => 0x12,
+        };
+        vec![binary]
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, usize), SerializationError>
+    where
+        Self: Sized
+    {
+        if bytes.is_empty() {
+            return Err(SerializationError::EndOfFile);
+        }
+        let tag = bytes[0];
+
+        let keyword = match tag {
+            0x01 => Keyword::PRINT,
+            0x02 => Keyword::TRUE,
+            0x03 => Keyword::FALSE,
+            0x04 => Keyword::EXIT,
+            0x05 => Keyword::LOOP,
+            0x06 => Keyword::GATE,
+            0x07 => Keyword::DUPLICATE,
+            0x08 => Keyword::DROP,
+            0x09 => Keyword::SWAP,
+            0x0A => Keyword::DEPTH,
+            0x0B => Keyword::ROT,
+            0x0C => Keyword::NROT,
+            0x0D => Keyword::OVER,
+            0x0E => Keyword::TUCK,
+            0x0F => Keyword::PICK,
+            0x10 => Keyword::ROLL,
+            0x11 => Keyword::CLEAR,
+            0x12 => Keyword::TYPE,
+            _ => return Err(SerializationError::InvalidTagByte(tag))
+        };
+
+        Ok((keyword, 1))
+    }
+}
+
+impl ByteSized for Operation {
+    fn to_bytes(&self) -> Vec<u8> {
+        let binary: u8 = match self {
+            Operation::Add => 0x01,
+            Operation::Subtract => 0x02,
+            Operation::Multiply => 0x03,
+            Operation::Divide => 0x04,
+            Operation::Equal => 0x05,
+            Operation::NotEqual => 0x06,
+            Operation::Greater => 0x07,
+            Operation::Lesser => 0x08,
+            Operation::GreaterEqual => 0x09,
+            Operation::LesserEqual => 0x0A,
+            Operation::And => 0x0B,
+            Operation::Or => 0x0C,
+            Operation::Not => 0x0D,
+            Operation::Run => 0x0E,
+        };
+        vec![binary]
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, usize), crate::serial::SerializationError>
+    where
+        Self: Sized
+    {
+        if bytes.is_empty() {
+            return Err(SerializationError::EndOfFile);
+        }
+        let tag = bytes[0];
+
+        let operation = match tag {
+            0x01 => Operation::Add,
+            0x02 => Operation::Subtract,
+            0x03 => Operation::Multiply,
+            0x04 => Operation::Divide,
+            0x05 => Operation::Equal,
+            0x06 => Operation::NotEqual,
+            0x07 => Operation::Greater,
+            0x08 => Operation::Lesser,
+            0x09 => Operation::GreaterEqual,
+            0x0A => Operation::LesserEqual,
+            0x0B => Operation::And,
+            0x0C => Operation::Or,
+            0x0D => Operation::Not,
+            0x0E => Operation::Run,
+            _ => return Err(SerializationError::InvalidTagByte(tag))
+        };
+        Ok((operation, 1))
+    }
+}
+
+impl ByteSized for Value {
+    fn to_bytes(&self) -> Vec<u8> {
+        match self {
+            Value::Integer(i) => {
+                let mut bytes = vec![0x01];
+
+                bytes.extend_from_slice(&i.to_be_bytes());
+                bytes
+            },
+            Value::Float(f) => {
+                let mut bytes = vec![0x02];
+
+                bytes.extend_from_slice(&f.to_be_bytes());
+                bytes
+            },
+            Value::Boolean(b) => {
+                let mut bytes = vec![0x03];
+
+                bytes.push(match b {
+                    true => 0x01,
+                    false => 0x00,
+                });
+                bytes
+            },
+            Value::String(s) => {
+                let mut bytes = vec![0x04];
+                
+                let s_bytes = s.as_bytes();
+
+                let length = s_bytes.len() as u32;
+                
+                bytes.extend_from_slice(&length.to_be_bytes());
+
+                bytes.extend_from_slice(s_bytes);
+                bytes
+            },
+            Value::Block(t) => {
+                let mut bytes = vec![0x05]; //Tag byte
+
+                let length = t.len() as u32; //Get the length
+
+                bytes.extend_from_slice(&length.to_be_bytes()); //Push the length
+
+                for token in t {
+                    bytes.append(&mut token.to_bytes()); //Push each token
+                }
+
+                bytes 
+            },
+            Value::Function(s) => {
+                let mut bytes = vec![0x06];
+                
+                let s_bytes = s.as_bytes();
+
+                let length = s_bytes.len() as u32;
+                
+                bytes.extend_from_slice(&length.to_be_bytes());
+
+                bytes.extend_from_slice(s_bytes);
+                bytes
+            },
+            Value::Tag(s) => {
+                let mut bytes = vec![0x07];
+                
+                let s_bytes = s.as_bytes();
+
+                let length = s_bytes.len() as u32;
+                
+                bytes.extend_from_slice(&length.to_be_bytes());
+
+                bytes.extend_from_slice(s_bytes);
+                bytes
+            }
+        }
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, usize), SerializationError>
+        where
+            Self: Sized
+    {
+        if bytes.is_empty() {
+            return Err(SerializationError::EndOfFile);
+        }
+        let tag = bytes[0];
+        match tag {
+            0x01 => {
+                if bytes.len() < 5 {
+                    return Err(SerializationError::EndOfFile);
+                }
+                let payload: [u8; 4]  = bytes[1..5].try_into().unwrap(); //Never panics because we checked the length
+                Ok((Value::Integer(i32::from_be_bytes(payload)), 5))
+            },
+            0x02 => {
+                if bytes.len() < 5 {
+                    return Err(SerializationError::EndOfFile);
+                }
+                let payload: [u8; 4]  = bytes[1..5].try_into().unwrap(); //Never panics because we checked the length
+                Ok((Value::Float(f32::from_be_bytes(payload)), 5))
+            },
+            0x03 => {
+                if bytes.len() < 2 {
+                    return Err(SerializationError::EndOfFile);
+                }
+                let payload = match bytes[1] {
+                    0x01 => true,
+                    0x00 => false,
+                    _ => return Err(SerializationError::InvalidTagByte(bytes[1]))
+                };
+                Ok((Value::Boolean(payload), 2))
+            },
+            0x04 => {
+                if bytes.len() < 5 { //Check we have enough bytes for the length of the string
+                    return Err(SerializationError::EndOfFile);
+                }
+                let len = u32::from_be_bytes(bytes[1..5].try_into().unwrap());//Unwrap is okay because we checked the length
+                if bytes.len() < 5 + len as usize { //Check if we have enough bytes for the data of the string
+                    return Err(SerializationError::EndOfFile);
+                }
+                let payload = &bytes[5..5+len as usize];
+                let string = match String::from_utf8(payload.to_vec()) {
+                    Ok(s) => s,
+                    Err(e) => return Err(SerializationError::InvalidUTF8Encoding(e))
+                };
+
+                return Ok((Value::String(string),5+len as usize));
+            },
+            0x05 => {
+                if bytes.len() < 5 { //Check if we have enough bytes for the length of the block
+                    return Err(SerializationError::EndOfFile);
+                }
+                let len = u32::from_be_bytes(bytes[1..5].try_into().unwrap()); //Get length and unwrap is okay because we checked length
+                if bytes.len() < 5 + len as usize { //Check if we enough bytes for the tokens
+                    return Err(SerializationError::EndOfFile);
+                }
+                let mut tokens = Vec::new();
+                let mut offset = 5;
+                for _ in 0..len {
+                    let (token, new_offset) = Token::from_bytes(&bytes[offset..])?;
+                    offset += new_offset;
+                    tokens.push(token);
+                }
+                return Ok((Value::Block(tokens) ,offset))
+            },
+            0x06 => {
+                if bytes.len() < 5 { //Check we have enough bytes for the length of the string
+                    return Err(SerializationError::EndOfFile);
+                }
+                let len = u32::from_be_bytes(bytes[1..5].try_into().unwrap());//Unwrap is okay because we checked the length
+                if bytes.len() < 5 + len as usize { //Check if we have enough bytes for the data of the string
+                    return Err(SerializationError::EndOfFile);
+                }
+                let payload = &bytes[5..5+len as usize];
+                let string = match String::from_utf8(payload.to_vec()) {
+                    Ok(s) => s,
+                    Err(e) => return Err(SerializationError::InvalidUTF8Encoding(e))
+                };
+
+                return Ok((Value::Function(string),5+len as usize));
+            },
+            0x07 => {
+                if bytes.len() < 5 { //Check we have enough bytes for the length of the string
+                    return Err(SerializationError::EndOfFile);
+                }
+                let len = u32::from_be_bytes(bytes[1..5].try_into().unwrap());//Unwrap is okay because we checked the length
+                if bytes.len() < 5 + len as usize { //Check if we have enough bytes for the data of the string
+                    return Err(SerializationError::EndOfFile);
+                }
+                let payload = &bytes[5..5+len as usize];
+                let string = match String::from_utf8(payload.to_vec()) {
+                    Ok(s) => s,
+                    Err(e) => return Err(SerializationError::InvalidUTF8Encoding(e))
+                };
+
+                return Ok((Value::Tag(string),5+len as usize));
+            },
+            _ => return Err(SerializationError::InvalidTagByte(tag))
+        }
+    }
 }

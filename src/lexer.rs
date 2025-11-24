@@ -1,6 +1,6 @@
 use std::{collections::HashMap, error::Error, fmt, iter::Peekable, str::Chars, sync::OnceLock};
 
-use crate::types::{Keyword, Operation, Value};
+use crate::{serial::{ByteSized, SerializationError}, types::{Keyword, Operation, Value}};
 
 static KEYWORDS: OnceLock<HashMap<&'static str, Keyword>> = OnceLock::new(); 
 
@@ -10,6 +10,29 @@ pub struct TokenPosition {
     pub col: usize,
 }
 
+impl ByteSized for TokenPosition {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut byte = (self.row as u32).to_be_bytes().to_vec();
+
+        byte.extend_from_slice(&(self.col as u32).to_be_bytes());
+
+        byte
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, usize), SerializationError>
+        where
+            Self: Sized
+    {
+        if bytes.len() < 8 {
+            return Err(SerializationError::EndOfFile);
+        }
+
+        let row = u32::from_be_bytes(bytes[0..4].try_into().unwrap()) as usize; //Unwrap is fine because we checked size
+        let col = u32::from_be_bytes(bytes[4..8].try_into().unwrap()) as usize; //Same here
+
+        return Ok((TokenPosition {row, col}, 8));
+    }
+}
 
 impl Clone for TokenPosition {
     fn clone(&self) -> Self {
@@ -25,6 +48,52 @@ pub enum TokenType {
     Literal(Value),
     Op(Operation),
     Keyword(Keyword),
+}
+
+impl ByteSized for TokenType {
+    fn to_bytes(&self) -> Vec<u8> {
+        match self {
+            TokenType::Literal(v) => {
+                let mut bytes = vec![0x01];
+                bytes.extend_from_slice(&v.to_bytes());
+                bytes
+            },
+            TokenType::Op(o) => {
+                let mut bytes = vec![0x02];
+                bytes.extend_from_slice(&o.to_bytes());
+                bytes
+            },
+            TokenType::Keyword(k) => {
+                let mut bytes = vec![0x03];
+                bytes.extend_from_slice(&k.to_bytes());
+                bytes
+            }
+        }
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, usize), crate::serial::SerializationError>
+        where
+            Self: Sized
+    {
+        if bytes.len() < 2 {
+            return Err(SerializationError::EndOfFile);
+        }
+        match bytes[0] {
+            0x01 => {
+                let (value, bytes_read) = Value::from_bytes(&bytes[1..])?;
+                Ok((TokenType::Literal(value), bytes_read + 1))
+            },
+            0x02 => {
+                let (value, bytes_read) = Operation::from_bytes(&bytes[1..])?;
+                Ok((TokenType::Op(value), bytes_read + 1))
+            },
+            0x03 => {
+                let (value, bytes_read) = Keyword::from_bytes(&bytes[1..])?;
+                Ok((TokenType::Keyword(value), bytes_read + 1))
+            },
+            _ => return Err(SerializationError::InvalidTagByte(bytes[0]))
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -43,6 +112,26 @@ impl Token {
                 col,
             }
         }
+    }
+}
+
+impl ByteSized for Token {
+    fn to_bytes(&self) -> Vec<u8> {
+        let mut bytes = self.kind.to_bytes();
+        bytes.append(&mut self.pos.to_bytes());
+        bytes
+    }
+
+    fn from_bytes(bytes: &[u8]) -> Result<(Self, usize), SerializationError>
+        where
+            Self: Sized
+    {
+        if bytes.is_empty() {
+            return Err(SerializationError::EndOfFile);
+        }
+        let (kind, type_bytes) = TokenType::from_bytes(bytes)?;
+        let (pos, pos_bytes) = TokenPosition::from_bytes(&bytes[type_bytes..])?;
+        return Ok((Token {kind, pos}, type_bytes + pos_bytes));
     }
 }
 
