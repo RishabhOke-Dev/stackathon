@@ -24,6 +24,7 @@ pub enum Keyword {
     ROLL,
     CLEAR,
     TYPE, //gets the type and pushes it onto the stack. The type of the value it pushes is "Tag"
+    USE, //Library invokation
 }
 
 #[derive(Debug)]
@@ -189,6 +190,7 @@ impl ByteSized for Keyword {
             Keyword::ROLL => 0x10,
             Keyword::CLEAR => 0x11,
             Keyword::TYPE => 0x12,
+            Keyword::USE => 0x13,
         };
         vec![binary]
     }
@@ -221,6 +223,7 @@ impl ByteSized for Keyword {
             0x10 => Keyword::ROLL,
             0x11 => Keyword::CLEAR,
             0x12 => Keyword::TYPE,
+            0x13 => Keyword::USE,
             _ => return Err(SerializationError::InvalidTagByte(tag))
         };
 

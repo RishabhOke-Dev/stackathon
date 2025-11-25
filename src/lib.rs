@@ -18,20 +18,121 @@
 //! * 'lexer': Handles tokenizing valid stackathon source code
 //! * 'vm': Handles running the tokens given by the lexer
 //! * 'types': Defines types used throughout the library
-//! 
+//! * 'serial': Handles serializing libraries efficiently
 
 
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fs::File, io::{BufWriter, Write}};
 
-use crate::{lexer::{tokenize, Token}, vm::execute};
+use crate::{lexer::{Token, tokenize}, serial::ByteSized, vm::execute};
 
 
 
 mod lexer;
 mod vm;
 mod types;
+mod serial;
 
+/// Used for libraries
+/// 
+/// `a.b.c` turns into `abc`.
+/// 
+/// `2.3.4` becomes `234`.
+/// 
+/// `0.3.5` becomes `35`.
+const VERSION: u32 = 40;
+
+///Used when turning a stackathon file into a lib file
+/// 
+/// **Arguments**
+/// * `filepath`: The stackathon file to compile
+pub fn compile_file(filepath: &str) {
+    let source = match std::fs::read_to_string(filepath) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!("Error reading file '{}': {}", filepath, e);
+            return;
+        }
+    };
+    compile_string(source, filepath);
+}
+
+///Used when turning a stackathon code into a lib file
+/// 
+/// **Arguments**
+/// * `source`: The stackathon source code to compile
+/// * `libname`: The name of the new lib file
+pub fn compile_string(source: String, libname: &str) {
+    let mut functions: HashMap<String, Vec<Token>> = HashMap::new();
+
+    if let Err(error) = tokenize(&source, None, &mut functions) {
+       
+        let pos = error.position();
+        print_error(&source, &error.to_string(), pos.row, pos.col);
+        return;
+    
+    }
+
+    //Instead of executing the code, we serialze the function table.
+
+    let filename = libname.to_string() + ".lib";
+
+    let library = match File::create(filename) {
+        Ok(file) => file,
+        Err(e) => {
+            eprintln!("Error making library file: {}", e);
+            return;
+        }
+    };
+
+    let mut writer = BufWriter::new(library);
+    //We will use the writer later
+    //For now we will make a buffer
+    let mut buffer = Vec::new();
+    //Magic number (4 bytes)
+    buffer.extend_from_slice(b"STKL");
+    //Version (4 bytes)
+    buffer.extend_from_slice(&VERSION.to_be_bytes());
+    //How many functions/tags there are (4 bytes)
+    buffer.extend_from_slice(&(functions.len() as u32).to_be_bytes());
+
+    //End of header (12 bytes)
+
+    //write each key-value pair
+    for function in functions {
+
+        //key serialization
+
+        let key_length = function.0.len();
+        //length of the key (4 bytes)
+        buffer.extend_from_slice(&(key_length as u32).to_be_bytes());
+        //the key
+        buffer.extend_from_slice(function.0.as_bytes());
+        
+        //value serialization
+
+        let data_length = function.1.len();
+        //length of data (4 bytes)
+        buffer.extend_from_slice(&(data_length as u32).to_be_bytes());
+        //the data
+        for token in function.1 {
+            buffer.extend_from_slice(&token.to_bytes());
+        }
+    }
+
+    if let Err(error) = writer.write_all(&buffer) {
+        eprintln!("Error writing library to file: {}", error);
+        return;
+    }
+
+    if let Err(error) = writer.flush() {
+        eprintln!("Error flushing data to file: {}", error);
+        return;
+    }
+
+    
+
+}
 /// Used when running stackthon code from a file.
 /// 
 /// **Arguments:**

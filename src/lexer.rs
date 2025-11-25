@@ -1,6 +1,6 @@
 use std::{collections::HashMap, error::Error, fmt, iter::Peekable, str::Chars, sync::OnceLock};
 
-use crate::{serial::{ByteSized, SerializationError}, types::{Keyword, Operation, Value}};
+use crate::{VERSION, serial::{ByteSized, SerializationError}, types::{Keyword, Operation, Value}};
 
 static KEYWORDS: OnceLock<HashMap<&'static str, Keyword>> = OnceLock::new(); 
 
@@ -144,6 +144,8 @@ pub enum TokenizerError {
     BlockHadNoEnd(TokenPosition),
     StringHadNoEnd(TokenPosition),
     FunctionHasMultipleDefinitions(TokenPosition, String),
+    UnknownLibrary(TokenPosition, String),
+    InvalidLibrary(TokenPosition, String, SerializationError),
 }
 
 impl TokenizerError {
@@ -155,6 +157,8 @@ impl TokenizerError {
             TokenizerError::BlockHadNoEnd(pos) => *pos,
             TokenizerError::StringHadNoEnd(pos) => *pos,
             TokenizerError::FunctionHasMultipleDefinitions(pos, _) => *pos,
+            TokenizerError::UnknownLibrary(pos, _) => *pos,
+            TokenizerError::InvalidLibrary(pos, _, _) => *pos,
         }
     }
 }
@@ -174,6 +178,10 @@ impl fmt::Display for TokenizerError {
                 write!(f, "Syntax error({}:{}): String has no end.", pos.row, pos.col),
             Self::FunctionHasMultipleDefinitions(pos, func) =>
                 write!(f, "Syntax error({}:{}): Function '{}' has multiple definitions.", pos.row, pos.col, func),
+            Self::UnknownLibrary(pos, name) =>
+                write!(f, "Library error({}:{}): Library '{}' not found.", pos.row, pos.col, name),
+            Self::InvalidLibrary(pos, name, internal_error) =>
+                write!(f, "Library error({}:{}): Library '{}' is invalid: {}", pos.row, pos.col, name, internal_error),
         }
     }
 }
@@ -507,6 +515,39 @@ pub fn tokenize(code: &str, starting_position: Option<TokenPosition>, functions:
             if let Keyword::EXIT = keyword {
                 return Ok(tokens)
             }
+            if let Keyword::USE = keyword {
+                position.col += 1;
+                let character = match code.next() {
+                    Some(c) => c,
+                    None => return Err(TokenizerError::UnknownLibrary(position, "".to_string()))
+                };
+                if !character.is_whitespace() {
+                    return Err(TokenizerError::UnexpectedSymbol(position, character));
+                }
+                let starting_position = TokenPosition { row: position.row, col: position.col + 1 };
+                let mut filename = String::new();
+                while let Some(&character) = code.peek() {
+                    if character.is_whitespace() {
+                        break;
+                    }
+                    filename.push(code.next().unwrap()); //Unwrap is okay because we peeked first
+                    position.col += 1;
+                }
+                filename.push_str(".stk.lib");
+                let library_content = match std::fs::read(&filename) {
+                    Ok(s) => s,
+                    Err(_) => return Err(TokenizerError::UnknownLibrary(starting_position, filename))
+                };
+
+                let library_functions = match get_lib_hashmap(&library_content) {
+                    Ok(t) => t,
+                    Err(e) => return Err(TokenizerError::InvalidLibrary(starting_position, filename, e))
+                };
+
+                functions.extend(library_functions);
+
+                continue;
+            }
             tokens.push(Token::new(TokenType::Keyword(keyword), starting_position.row, starting_position.col));
         }
 
@@ -609,6 +650,70 @@ fn get_keywords() -> &'static HashMap<&'static str, Keyword> {
         map.insert("pick", Keyword::PICK);
         map.insert("roll", Keyword::ROLL);
         map.insert("clear", Keyword::CLEAR);
+        map.insert("use", Keyword::USE);
         map
     })
+}
+
+fn get_lib_hashmap(content: &[u8]) -> Result<HashMap<String, Vec<Token>>, SerializationError> {
+    if content.len() < 12 { //The header length
+        return Err(SerializationError::EndOfFile);
+    };
+    if content[0..4] != *b"STKL" {
+        return Err(SerializationError::InvalidFile);
+    }
+
+    let library_version = u32::from_be_bytes(content[4..8].try_into().unwrap()); //Unwrap okay because we checked length
+    
+    if library_version > VERSION {
+        return Err(SerializationError::InvalidVersion);
+    }
+    
+    let table_length = u32::from_be_bytes(content[8..12].try_into().unwrap()); //Unwrap okay. Size checked
+
+    let mut functions = HashMap::new();
+    //read each entry
+    let mut offset = 12;
+    for _ in 0..table_length {
+        if content.len() < offset + 4 {
+            return Err(SerializationError::EndOfFile);
+        }
+        let key_length = u32::from_be_bytes(content[offset..offset + 4].try_into().unwrap());//unwrap okay because we checked length
+        offset += 4;
+        if content.len() < offset + key_length as usize {
+            return Err(SerializationError::EndOfFile);
+        }
+        let key = match String::from_utf8(content[offset..offset + key_length as usize].to_vec()) {
+            Ok(s) => s,
+            Err(e) => return Err(SerializationError::InvalidUTF8Encoding(e)),
+        };
+        
+        offset += key_length as usize;
+        
+        if content.len() < offset + 4 {
+            return Err(SerializationError::EndOfFile);
+        }
+
+        let data_length = u32::from_be_bytes(content[offset..offset + 4].try_into().unwrap());//unwrap okay because we checked length
+
+        offset += 4;
+
+        if content.len() < offset + data_length as usize {
+            return Err(SerializationError::EndOfFile);
+        }
+
+        
+        let mut function_def = Vec::new();
+
+        for _ in 0..data_length {
+            let (token, read) = Token::from_bytes(&content[offset..])?;
+            offset += read;
+            function_def.push(token);
+        }
+
+        functions.insert(key, function_def);
+
+    }
+
+    return Ok(functions);
 }
