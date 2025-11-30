@@ -1,10 +1,12 @@
 [package]
 name = "stackathon"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2024"
 description = "The interpreter for the Stackathon language"
 license = "MIT"
 keywords = ["language"]
 authors = ["Rishabh Oke <rishabhoke@outlook.com>"]
+documentation = "https://docs.rs/stackathon/0.4.1/stackathon/"
+readme = "README.md"
 
 [dependencies]
