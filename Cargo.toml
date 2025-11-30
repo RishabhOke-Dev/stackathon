@@ -8,5 +8,6 @@ keywords = ["language"]
 authors = ["Rishabh Oke <rishabhoke@outlook.com>"]
 documentation = "https://docs.rs/stackathon/0.4.1/stackathon/"
 readme = "README.md"
+repository = "https://github.com/RishabhOke-Dev/stackathon"
 
 [dependencies]
