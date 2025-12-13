@@ -40,7 +40,7 @@ mod serial;
 /// `2.3.4` becomes `234`.
 /// 
 /// `0.3.5` becomes `35`.
-const VERSION: u32 = 40;
+const VERSION: u32 = 50;
 
 ///Used when turning a stackathon file into a lib file
 /// 

@@ -17,6 +17,13 @@ The operators '+', '-', '/', and '*' work on the top two items on the stack.
 2 2 +
 ;The + operator adds 2 + 2;
 ```
+When using the `/` with a string and an int, lets say n, the nth character in the string is pushed.
+
+```stackathon
+"Hello" 2 / print
+;Prints 'e';
+```
+
 Use the print keyword to print the top of the stack.
 Currently, when printing blocks, the output is not as clean as the other types.
 ```stackathon
@@ -138,7 +145,8 @@ foo $
 * `clear` Clears the entire stack
 * `type` Pushes type of the top of the stack onto the stack.
 * `use` Invokes a stackathon library.
+* `input` Pushes the user input as a string
+* `strlen` Pushes the length of a string, in Unicode Scalar values.
 
 ## Future Features
-* Input, stackathon does not have user input yet
 * Macros, to simplify code

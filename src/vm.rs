@@ -27,6 +27,7 @@ impl Stack {
 pub enum RuntimeError {
     OperatorInvalidValues(TokenPosition, char),
     KeywordInvalidValues(TokenPosition, Keyword),
+    InputError(TokenPosition),
 }
 
 impl RuntimeError {
@@ -34,6 +35,7 @@ impl RuntimeError {
         match self {
             RuntimeError::OperatorInvalidValues(pos, _) => *pos,
             RuntimeError::KeywordInvalidValues(pos, _) => *pos,
+            RuntimeError::InputError(pos) => *pos,
         }
     }
 }
@@ -44,7 +46,9 @@ impl Display for RuntimeError {
             Self::OperatorInvalidValues(pos, op) =>
                 write!(f,"Runtime Error({}:{}): Incorrect values provided for operator '{}'", pos.col, pos.row, op),
             Self::KeywordInvalidValues(pos, k) =>
-                write!(f,"Runtime Error({}:{}): Incorrect values provided for keyword '{:?}'", pos.col, pos.row, k)
+                write!(f,"Runtime Error({}:{}): Incorrect values provided for keyword '{:?}'", pos.col, pos.row, k),
+            Self::InputError(pos) =>
+                write!(f, "Runtime Error({}:{}): Issue with getting user input.", pos.col, pos.row),
         }
     }
 }
@@ -434,6 +438,24 @@ pub fn execute(tokens: &Vec<Token>, stack: &mut Stack, function_table: &HashMap<
                             }
                         ));
                     },
+                    Keyword::INPUT => {
+                        let mut input = String::new();
+                        if let Err(_) = std::io::stdin().read_line(&mut input) {
+                            return Err(RuntimeError::InputError(token.pos));
+                        };
+                        stack.push(Value::String(input.trim().to_string()));
+                    },
+                    Keyword::STRLEN => {
+                        let string = match stack.pop() {
+                            Some(v) => match v {
+                                Value::String(s) => s,
+                                _ => return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::STRLEN)),
+                            },
+                            None => return Err(RuntimeError::KeywordInvalidValues(token.pos, Keyword::STRLEN))
+                        };
+                        
+                        stack.push(Value::Integer(string.chars().count() as i32))
+                    }
                     _ => ()//unused keywords,
                 }
             },

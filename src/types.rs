@@ -25,6 +25,8 @@ pub enum Keyword {
     CLEAR,
     TYPE, //gets the type and pushes it onto the stack. The type of the value it pushes is "Tag"
     USE, //Library invokation
+    INPUT, //Gets user input
+    STRLEN, //Gets length of string
 }
 
 #[derive(Debug)]
@@ -103,6 +105,7 @@ impl Div for Value {
             (Value::Float(v1), Value::Integer(v2)) => Some(Value::Float(v1 / v2 as f32)),
             (Value::Integer(v1), Value::Float(v2)) => Some(Value::Float(v1 as f32 / v2)),
             (Value::Integer(v1), Value::Integer(v2)) => Some(Value::Float(v1 as f32 / v2 as f32)),
+            (Value::String(v1), Value::Integer(v2)) => match v1.chars().nth((v2 as usize) - 1) {Some(s) => Some(Value::String(s.to_string())), None => None}
             _ => None   
         }
     }
@@ -191,6 +194,8 @@ impl ByteSized for Keyword {
             Keyword::CLEAR => 0x11,
             Keyword::TYPE => 0x12,
             Keyword::USE => 0x13,
+            Keyword::INPUT => 0x14,
+            Keyword::STRLEN => 0x15,
         };
         vec![binary]
     }
@@ -224,6 +229,8 @@ impl ByteSized for Keyword {
             0x11 => Keyword::CLEAR,
             0x12 => Keyword::TYPE,
             0x13 => Keyword::USE,
+            0x14 => Keyword::INPUT,
+            0x15 => Keyword::STRLEN,
             _ => return Err(SerializationError::InvalidTagByte(tag))
         };
 

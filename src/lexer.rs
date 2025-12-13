@@ -651,6 +651,8 @@ fn get_keywords() -> &'static HashMap<&'static str, Keyword> {
         map.insert("roll", Keyword::ROLL);
         map.insert("clear", Keyword::CLEAR);
         map.insert("use", Keyword::USE);
+        map.insert("input", Keyword::INPUT);
+        map.insert("strlen", Keyword::STRLEN);
         map
     })
 }
